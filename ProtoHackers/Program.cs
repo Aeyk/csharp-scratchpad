@@ -4,23 +4,28 @@ using System.Net.Sockets;
 using System.Reflection.Metadata;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 class Program {
     private static IPAddress localhost = IPAddress.Parse("127.0.0.1"); 
 
     static void Main(string[] args)
+    private static ILogger logger;
     {
         // Display the number of command line arguments.
-        Console.WriteLine(args[0]);
         Int32 port = Int32.Parse(args[1]) ?? 443;
+        using ILoggerFactory loggingFactory = LoggerFactory.Create(builder => builder.AddConsole());
+        logger = loggingFactory.CreateLogger("ProtoHackers/Solve1");
+        logger.LogInformation(args[0]);
         _ = typeof(Program).GetMethod("Solve" + args[0]).Invoke(null, []);
     }
 
-    public static void Solve0(Int32 port) {
-        Console.WriteLine("Solve0");
+    async public static Task Solve0(Int32 port = 1025)
+    {
         TcpListener server = null;
-        try {
-            server = new TcpListener(port);
+        logger.LogInformation("Connected. ");
+        try
+        {
             server.Start();
             Byte[] bytes = new Byte[4096];
             String? data = null;
@@ -30,24 +35,32 @@ class Program {
                 NetworkStream stream = client.GetStream();
                 int i ;
                 while((i = stream.Read(bytes, 0, bytes.Length))!=0)
+            logger.LogInformation($"Created Tcp Server on {localhost.ToString()}:{port}");
+            while (true)
+            {
+                logger.LogInformation("Waiting for connection. ");
+                using TcpClient client = await server.AcceptTcpClientAsync();
                 {
                     data = System.Text.Encoding.ASCII.GetString(bytes, 0, i);
                     byte[] msg = System.Text.Encoding.ASCII.GetBytes(data);
                     stream.Write(msg, 0, msg.Length);
                 }
+                        logger.LogInformation($"Recv: {data}");
+                        logger.LogInformation($"Send: {data}");
             }
         }
         catch(SocketException e)
         {
-            Console.WriteLine("SocketException: {0}", e);
+            logger.LogCritical($"{e}");
         }
         finally
         {
             server.Stop();
         }
     }
-    public static void Solve1(Int32 port) {
-        Console.WriteLine("Solve1");
+    public static void Solve1(Int32 port)
+    {
+        logger.LogInformation("Solve1");
         TcpListener server = null;
         try {
             server = new TcpListener(port);
@@ -74,12 +87,12 @@ class Program {
                         
                     });
                     stream.Write(msg, 0, msg.Length);
+                            logger.LogCritical("SocketException: {0}", e);
                 }
             }
         }
         catch(SocketException e)
         {
-            Console.WriteLine("SocketException: {0}", e);
         }
         finally
         {
