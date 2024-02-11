@@ -18,10 +18,10 @@ class Program
         Int32 solution = 1;
         TcpListener server = new TcpListener(localhost, port);
         using ILoggerFactory loggingFactory = LoggerFactory.Create(builder => builder.AddConsole());
-        logger = loggingFactory.CreateLogger("ProtoHackers/Solve1");
         string index = solution.ToString();
-        _ = typeof(Program).GetMethod(name: "Solve" + index)
-                           .Invoke(null, [server, 1045]);
+        logger = loggingFactory.CreateLogger($"ProtoHackers/Solve{index}:{port}");
+        _ = typeof(Program).GetMethod($"Solve{index}")
+                           .Invoke(null, [server, port]);
     }
 
     async public static Task Solve0(TcpListener server, Int32 port = 1025)
