@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 class Program
 {
-    private static IPAddress localhost = IPAddress.Parse("127.0.0.1");
+    private static IPAddress localhost = IPAddress.Parse("0.0.0.0");
     private static Int32 port = 1045;
     private static ILogger logger;
     static void Main(string[] args)
