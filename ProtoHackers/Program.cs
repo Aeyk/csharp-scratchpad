@@ -88,8 +88,8 @@ class Program
                     datas.ToList().ForEach(data =>
                     {
                         var json = JsonDocument.Parse(data).RootElement;
-                        bool isPrime = json.GetProperty("isPrime").GetBoolean();
-                        decimal number = json.GetProperty("number").GetDecimal();
+                        bool isPrime = json.GetProperty("isPrime").GetBoolean(); // TODO error handling
+                        decimal number = json.GetProperty("number").GetDecimal(); // TODO error handling
                         if (isPrime
                             && Program.isPrime(number))
                         {
