@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -6,6 +6,13 @@ using Microsoft.Extensions.Logging;
 
 namespace ProtoHacker
 {
+  public static class StringExt
+  {
+    public static string Truncate(this string s, int maxLength)
+    {
+      return s != null && s.Length > maxLength ? s.Substring(0, maxLength) : s;
+    }
+  }
   class Program
   {
     private static IPAddress localhost = IPAddress.Parse("0.0.0.0");
@@ -38,10 +45,14 @@ namespace ProtoHacker
 
       return 0;
     }
-
+    public static bool HasBinaryContent(string content)
+    {
+      return content.Any(ch => char.IsControl(ch) && ch != '\r' && ch != '\n');
+    }
     async public static Task Solve0(ILogger logger, TcpListener server, Int32 port = 1025)
     {
       bool listen = true;
+      int clientCount = 0;
       logger.LogInformation("Connected. ");
       try
       {
@@ -50,22 +61,35 @@ namespace ProtoHacker
         while (listen)
         {
           logger.LogInformation("Waiting for connection. ");
-          using TcpClient client = server.AcceptTcpClient();
           await Task.Run(() =>
           {
-            Byte[] buffer = new Byte[4096];
+            clientCount += 1;
+            using TcpClient client = server.AcceptTcpClient();
+            Byte[] buffer = new Byte[65535];
             String? data = null;
-            data = null;
             NetworkStream stream = client.GetStream();
-            int i;
+            int i = 0;
             while ((i = stream.Read(buffer, 0, buffer.Length)) != 0)
             {
               data = System.Text.Encoding.ASCII.GetString(buffer, 0, i);
-              logger.LogInformation($"Recv: {data}");
+              logger.LogInformation($"[{clientCount}] Recv # of bytes: {data.Length}");
+              if(!HasBinaryContent(data)) {
+                logger.LogInformation($"[{clientCount}] Recv: {data.Truncate(30)}... ");
+              } else {
+                logger.LogInformation($"[{clientCount}] Recv: [ BinaryData omitted ]");
+              }
+
               byte[] returnMessage = System.Text.Encoding.ASCII.GetBytes(data);
-              stream.Write(returnMessage, 0, returnMessage.Length);
-              logger.LogInformation($"Send: {data}");
+              stream.Write(buffer, 0, data.Length);
+
+              if(!HasBinaryContent(data)) {
+                logger.LogInformation($"[{clientCount}] Recv: {data.Truncate(30)}... ");
+              } else {
+                logger.LogInformation($"[{clientCount}] Recv: [ BinaryData omitted ]");
+              }
             }
+            stream.Close();
+            client.Close();
           });
         }
       }
@@ -79,7 +103,8 @@ namespace ProtoHacker
         {
           server.Stop();
         }
-        listen = false;
+        clientCount -= 1;
+        // listen = false;
       }
     }
 
