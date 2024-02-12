@@ -19,11 +19,11 @@ namespace ProtoHacker
       {
         throw new ArgumentNullException(nameof(args));
       }
-      logger.LogInformation(args.ToString());
       String index = "1";
       if (args.Length >= 1 && null != args[0])
       {
         index = Int32.Parse(args[0]).ToString();
+        logger.LogDebug($"Number of arguments: {args.Length}, solution index: {index}, args[0]: {args[0]}, port: {port}");
       }
       TcpListener server = new TcpListener(localhost, port);
       try
@@ -128,18 +128,18 @@ namespace ProtoHacker
           {
             data = System.Text.Encoding.ASCII.GetString(bytes, 0, i);
             logger.LogInformation(data);
-            JsonElement json;
             try
             {
               String sendMessage = ParseIsPrimeMessage(data);
+              logger.LogInformation($"Send: {sendMessage}");
               stream.Write(System.Text.Encoding.ASCII.GetBytes(sendMessage),
                 0,
                 System.Text.Encoding.ASCII.GetBytes(sendMessage).Length);
-              logger.LogDebug(sendMessage);
             }
             catch (System.Collections.Generic.KeyNotFoundException e)
             {
               logger.LogError(e.Message);
+              logger.LogInformation($"Send: {malformedResponse}");
               stream.Write(malformedResponse, 0, malformedResponse.Length);
               // client.Client.Close();
               listen = false;
@@ -147,6 +147,7 @@ namespace ProtoHacker
             catch (System.Text.Json.JsonException e)
             {
               logger.LogError($"{e.GetType()}{e.Message}");
+              logger.LogInformation($"Send: {malformedResponse}");
               stream.Write(malformedResponse, 0, malformedResponse.Length);
               // client.Client.Close();
               listen = false;
