@@ -195,12 +195,13 @@ namespace ProtoHacker
           Byte[] buffer = new Byte[9]; // TODO handle incorrectly sized messagesd
           while (listen && (i = stream.Read(buffer, 0, buffer.Length)) != 0)
           {
-            if (0 == buffer[0].CompareTo("I"))
+            logger.LogInformation($"buffer[0]'s type: {buffer[0].GetType()}.");
+            if (0 == buffer[0].CompareTo((Byte)'I'))
             {
               InsertBankMessage message = new(BitConverter.ToInt32(buffer, 1), BitConverter.ToInt32(buffer, 5));
               bankRecords.Add(message);
             }
-            else if (0 == buffer[0].CompareTo("Q"))
+            else if (0 == buffer[0].CompareTo((Byte)'Q'))
             {
               QueryBankMessage message = new(BitConverter.ToInt32(buffer, 1), BitConverter.ToInt32(buffer, 5));
               var query = from InsertBankMessage m in bankRecords
