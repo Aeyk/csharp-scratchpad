@@ -127,30 +127,90 @@ namespace ProtoHacker
           while (listen && (i = stream.Read(bytes, 0, bytes.Length)) != 0)
           {
             data = System.Text.Encoding.ASCII.GetString(bytes, 0, i);
-            logger.LogInformation(data);
-            try
+            var datas = data.Split("\n");
+            Array.ForEach(datas, data =>
             {
-              String sendMessage = ParseIsPrimeMessage(data);
-              logger.LogInformation($"Send: {sendMessage}");
-              stream.Write(System.Text.Encoding.ASCII.GetBytes(sendMessage),
-                0,
-                System.Text.Encoding.ASCII.GetBytes(sendMessage).Length);
+              logger.LogInformation(data);
+              try
+              {
+                String sendMessage = ParseIsPrimeMessage(data);
+                logger.LogInformation($"Send: {sendMessage}");
+                stream.Write(System.Text.Encoding.ASCII.GetBytes(sendMessage),
+                  0,
+                  System.Text.Encoding.ASCII.GetBytes(sendMessage).Length);
+              }
+              catch (System.Collections.Generic.KeyNotFoundException e)
+              {
+                logger.LogError(e.Message);
+                logger.LogInformation($"Send: {malformedResponse}");
+                stream.Write(malformedResponse, 0, malformedResponse.Length);
+                client.Close();
+                listen = false;
+              }
+              catch (System.Text.Json.JsonException e)
+              {
+                logger.LogError($"{e.GetType()}{e.Message}");
+                logger.LogInformation($"Send: {malformedResponse}");
+                stream.Write(malformedResponse, 0, malformedResponse.Length);
+                client.Close();
+                listen = false;
+              }
+            });
+          }
+        }
+      }
+      catch (SocketException e)
+      {
+        logger.LogCritical("SocketException: {0}", e);
+      }
+      finally
+      {
+        if (server != null)
+        {
+          server.Stop();
+        }
+      }
+    }
+    public record InsertBankMessage(
+      Int32 Timestamp,
+      Int32 Price
+    );
+    public record QueryBankMessage(
+      Int32 MinTime,
+      Int32 MaxTime
+    );
+    public static void Solve2(ILogger logger, TcpListener server, Int32 port)
+    {
+      var bankRecords = new ArrayList();
+      bool listen = true;
+      logger.LogInformation("Solve2");
+      try
+      {
+        server.Start();
+        while (listen)
+        {
+          using TcpClient client = server.AcceptTcpClient();
+          var stream = client.GetStream();
+          int i;
+          Byte[] buffer = new Byte[9]; // TODO handle incorrectly sized messagesd
+          while (listen && (i = stream.Read(buffer, 0, buffer.Length)) != 0)
+          {
+            if (0 == buffer[0].CompareTo("I"))
+            {
+              InsertBankMessage message = new(BitConverter.ToInt32(buffer, 1), BitConverter.ToInt32(buffer, 5));
+              bankRecords.Add(message);
             }
-            catch (System.Collections.Generic.KeyNotFoundException e)
+            else if (0 == buffer[0].CompareTo("Q"))
             {
-              logger.LogError(e.Message);
-              logger.LogInformation($"Send: {malformedResponse}");
-              stream.Write(malformedResponse, 0, malformedResponse.Length);
-              // client.Client.Close();
-              listen = false;
+              QueryBankMessage message = new(BitConverter.ToInt32(buffer, 1), BitConverter.ToInt32(buffer, 5));
+              var query = from InsertBankMessage m in bankRecords
+                          where m.Timestamp >= message.MinTime && m.Timestamp <= message.MaxTime
+                          select m;
+              var average = BitConverter.GetBytes(query.Average(q => q.Price));
             }
-            catch (System.Text.Json.JsonException e)
+            else
             {
-              logger.LogError($"{e.GetType()}{e.Message}");
-              logger.LogInformation($"Send: {malformedResponse}");
-              stream.Write(malformedResponse, 0, malformedResponse.Length);
-              // client.Client.Close();
-              listen = false;
+              // TODO handle invalid message type
             }
           }
         }
@@ -359,9 +419,10 @@ namespace ProtoHackerTests
     [Test]
     public void TestSolution1()
     {
+      // TODO test sending multiple newline delimited messages at once, conforming (dotProduct) malformed
       string[] primeCases = [
          //"""{"method": "isPrime", "number": 1}""",
-         """{"method": "isPrime", "number": 11621}""",
+        """{"method": "isPrime", "number": 11621}""",
         """{"method": "isPrime", "number": 33721}""",
         """{"method": "isPrime", "number": 55511}""",
         """{"method": "isPrime", "number": 63281}""",
