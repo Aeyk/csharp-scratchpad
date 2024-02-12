@@ -192,26 +192,33 @@ namespace ProtoHacker
           using TcpClient client = server.AcceptTcpClient();
           var stream = client.GetStream();
           int i;
-          Byte[] buffer = new Byte[9]; // TODO handle incorrectly sized messagesd
-          while (listen && (i = stream.Read(buffer, 0, buffer.Length)) != 0)
+          int count = 9;
+          Byte[] buffer = new Byte[count]; // TODO handle incorrectly sized messagesd
+          while (count != 0 && listen && (i = stream.Read(buffer, 0, buffer.Length)) != 0)
           {
-            logger.LogInformation($"buffer[0]'s type: {buffer[0].GetType()}, buffer[0]'s value: {(char)buffer[0]}.");
-            if (0 == buffer[0].CompareTo((Byte)'I'))
+            count--;
+            if (count == 0)
             {
-              InsertBankMessage message = new(BitConverter.ToInt32(buffer, 1), BitConverter.ToInt32(buffer, 5));
-              bankRecords.Add(message);
-            }
-            else if (0 == buffer[0].CompareTo((Byte)'Q'))
-            {
-              QueryBankMessage message = new(BitConverter.ToInt32(buffer, 1), BitConverter.ToInt32(buffer, 5));
-              var query = from InsertBankMessage m in bankRecords
-                          where m.Timestamp >= message.MinTime && m.Timestamp <= message.MaxTime
-                          select m;
-              var average = BitConverter.GetBytes(query.Average(q => q.Price));
-            }
-            else
-            {
-              // TODO handle invalid message type
+              count = 9;
+
+              logger.LogInformation($"buffer[0]'s type: {buffer[0].GetType()}, buffer[0]'s value: {(char)buffer[0]}.");
+              if (0 == buffer[0].CompareTo((Byte)'I'))
+              {
+                InsertBankMessage message = new(BitConverter.ToInt32(buffer, 1), BitConverter.ToInt32(buffer, 5));
+                bankRecords.Add(message);
+              }
+              else if (0 == buffer[0].CompareTo((Byte)'Q'))
+              {
+                QueryBankMessage message = new(BitConverter.ToInt32(buffer, 1), BitConverter.ToInt32(buffer, 5));
+                var query = from InsertBankMessage m in bankRecords
+                            where m.Timestamp >= message.MinTime && m.Timestamp <= message.MaxTime
+                            select m;
+                var average = BitConverter.GetBytes(query.Average(q => q.Price));
+              }
+              else
+              {
+                // TODO handle invalid message type
+              }
             }
           }
         }
