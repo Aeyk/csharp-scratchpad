@@ -1,4 +1,4 @@
-namespace TodoList.Models;
+namespace Todo.Models;
 
 public class ErrorViewModel
 {
