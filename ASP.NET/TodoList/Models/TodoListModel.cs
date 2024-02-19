@@ -37,8 +37,8 @@ public enum TodoStateEnum : ushort
 
 public class TodoItem
 {
-    public Guid Id { get; set; } = Uuid.NewSequential();
+    public Guid Id { get; set; } = Uuid.NewSequential(); // TODO test 
     public string Content { get; set; }
-    public TodoList TodoList { get; set; }
+    public Guid TodoListId { get; set; }
     public TodoStateEnum State { get; set; }
 }
