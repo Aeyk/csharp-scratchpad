@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -13,6 +13,84 @@ namespace ProtoHacker
       return s != null && s.Length > maxLength ? s.Substring(0, maxLength) : s;
     }
   }
+  interface IProtoHackersService
+  {
+    public void Process(Stream stream);
+  }
+  public abstract class ProtoHackersService : IProtoHackersService
+  {
+    protected TcpClient client;
+    public TcpListener server;
+    protected ILogger logger;
+
+    public bool HasBinaryContent(string content)
+    {
+      return content.Any(ch => char.IsControl(ch) && ch != '\r' && ch != '\n');
+    }
+    public ProtoHackersService(
+       ILogger _logger, TcpListener _server)
+    {
+      this.logger = _logger;
+      this.server = _server;
+    }
+    public void Process(Stream stream)
+    {
+      throw new NotImplementedException();
+    }
+  }
+  public class SmokeTestService : ProtoHackersService
+  {
+    private ILogger logger;
+    private Stream stream;
+    private TcpClient client;
+    public SmokeTestService(
+      ILogger _logger, TcpListener _server) :
+        base(_logger, _server)
+    {
+      logger = _logger;
+      this.server = _server;
+    }
+    public void Process()
+    {
+      int i = 0;
+      string data;
+      Byte[] buffer = new Byte[65535];
+      server.Start();
+      using(client = server.AcceptTcpClient())
+      using(stream = client.GetStream()) {
+        logger.LogInformation("Solve0");
+        while ((i = stream.Read(buffer, 0, buffer.Length)) != 0)
+        {
+          data = System.Text.Encoding.ASCII.GetString(buffer, 0, i);
+          logger.LogInformation($"Recv # of bytes: {data.Length}");
+          if (!HasBinaryContent(data))
+          {
+            logger.LogInformation($"Recv: {data.Truncate(30)}... ");
+          }
+          else
+          {
+            logger.LogInformation($"Recv: [ BinaryData omitted ]");
+          }
+
+          byte[] returnMessage = System.Text.Encoding.ASCII.GetBytes(data);
+          stream.Write(buffer, 0, data.Length);
+
+          if (!HasBinaryContent(data))
+          {
+            logger.LogInformation($"Send: {data.Truncate(30)}... ");
+          }
+          else
+          {
+            logger.LogInformation($"Send: [ BinaryData omitted ]");
+          }
+        }
+      }
+      stream.Close();
+      client.Close();
+
+    }
+  }
+
   class Program
   {
     private static IPAddress localhost = IPAddress.Parse("0.0.0.0");
@@ -49,70 +127,19 @@ namespace ProtoHacker
     {
       return content.Any(ch => char.IsControl(ch) && ch != '\r' && ch != '\n');
     }
-    async public static Task Solve0(ILogger logger, TcpListener server, Int32 port = 1025)
+    async public static Task Solve0(ILogger logger, TcpListener server, Int32 port = 1045)
     {
-      bool listen = true;
-      int clientCount = 0;
-      logger.LogInformation("Connected. ");
-      try
+      var es = new SmokeTestService(logger, server);
+      while (true)
       {
-        logger.LogInformation($"Created Tcp Server on {localhost.ToString()}:{port}");
-        server.Start();
-        while (listen)
-        {
-          logger.LogInformation("Waiting for connection. ");
-          await Task.Run(() =>
-          {
-            clientCount += 1;
-            using TcpClient client = server.AcceptTcpClient();
-            Byte[] buffer = new Byte[65535];
-            String? data = null;
-            NetworkStream stream = client.GetStream();
-            int i = 0;
-            while ((i = stream.Read(buffer, 0, buffer.Length)) != 0)
-            {
-              data = System.Text.Encoding.ASCII.GetString(buffer, 0, i);
-              logger.LogInformation($"[{clientCount}] Recv # of bytes: {data.Length}");
-              if(!HasBinaryContent(data)) {
-                logger.LogInformation($"[{clientCount}] Recv: {data.Truncate(30)}... ");
-              } else {
-                logger.LogInformation($"[{clientCount}] Recv: [ BinaryData omitted ]");
-              }
-
-              byte[] returnMessage = System.Text.Encoding.ASCII.GetBytes(data);
-              stream.Write(buffer, 0, data.Length);
-
-              if(!HasBinaryContent(data)) {
-                logger.LogInformation($"[{clientCount}] Recv: {data.Truncate(30)}... ");
-              } else {
-                logger.LogInformation($"[{clientCount}] Recv: [ BinaryData omitted ]");
-              }
-            }
-            stream.Close();
-            client.Close();
-          });
-        }
-      }
-      catch (SocketException e)
-      {
-        logger.LogCritical($"{e}");
-      }
-      finally
-      {
-        if (server != null)
-        {
-          server.Stop();
-        }
-        clientCount -= 1;
-        // listen = false;
+        es.Process();
       }
     }
-
     public static bool IsPrime(Decimal n)
     {
       if (n <= 1) return false;
       for (int i = 2; i * i <= n; i++)
-        if (n % i == 0) return false;
+      if (n % i == 0) return false;
       return true;
     }
 
