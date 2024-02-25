@@ -133,53 +133,50 @@ namespace ProtoHacker
 
     public void Process()
     {
-      int i = 0;
-      string data;
+      logger.LogInformation("Solve1");
       Byte[] buffer = new Byte[65535];
       String sendMessage = "";
-      var malformedResponse = System.Text.Encoding.ASCII.GetBytes("{}");
+      var malformedResponse = "{}";
       try
       {
         server.Start();
-        using(client = server.AcceptTcpClient())
-        using(stream = client.GetStream())
+        using(TcpClient client = server.AcceptTcpClient())
+        using(NetworkStream stream = client.GetStream())
+        using(StreamReader reader = new(stream))
+        using(StreamWriter writer = new(stream))
         {
-          logger.LogInformation("Solve1");
-          while ((i = stream.Read(buffer, 0, buffer.Length)) != 0)
+          while (client.Connected)
           {
-            data = System.Text.Encoding.ASCII.GetString(buffer, 0, i);
+            var data = reader.ReadLine();
             logger.LogInformation($"Recv: {data}");
-            var datas = data.Split("\n").SkipLast(1).ToArray();
-            Array.ForEach(datas, data =>
+            try
             {
-              try
-              {
-                if (0 != data.Length)
-                {
-                  // logger.LogInformation($"Processing: {data}\nSize: {data.Length}");
-                  // logger.LogInformation($"Send: {sendMessage}");
-                  sendMessage = ParseIsPrimeMessage(data);
+              if (null == data)
+                break;
 
-                  stream.Write(System.Text.Encoding.ASCII.GetBytes(sendMessage),
-                    0,
-                    System.Text.Encoding.ASCII.GetBytes(sendMessage).Length);
-                }
-              }
-              catch (System.Collections.Generic.KeyNotFoundException e)
-              {
-                logger.LogError(e.Message);
-                logger.LogInformation($"Send: {malformedResponse}");
-                stream.Write(malformedResponse, 0, malformedResponse.Length);
-                client.Close();
-              }
-              catch (System.Text.Json.JsonException e)
-              {
-                logger.LogError($"{e.GetType()}{e.Message}");
-                logger.LogInformation($"Send: {malformedResponse}");
-                stream.Write(malformedResponse, 0, malformedResponse.Length);
-                client.Close();
-              }
-            });
+              logger.LogDebug($"Processing: {data}\nSize: {data.Length}");
+              logger.LogDebug($"Send: {sendMessage}");
+              sendMessage = ParseIsPrimeMessage(data);
+
+              writer.Write(sendMessage);
+              writer.Flush();
+            }
+            catch (System.Collections.Generic.KeyNotFoundException e)
+            {
+              logger.LogError(e.Message);
+              logger.LogInformation($"Send: {malformedResponse}");
+              writer.Write(malformedResponse);
+              client.Close();
+              break;
+            }
+            catch (System.Text.Json.JsonException e)
+            {
+              logger.LogError($"{e.GetType()}: {e.Message}");
+              logger.LogInformation($"Send: {malformedResponse}");
+              writer.Write(malformedResponse);
+              client.Close();
+              break;
+            }
           }
         }
       }
