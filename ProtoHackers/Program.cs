@@ -87,10 +87,117 @@ namespace ProtoHacker
       }
       stream.Close();
       client.Close();
-
     }
   }
+  public class PrimeTimeService : ProtoHackersService, IDisposable
+  {
+    private ILogger logger;
+    private Stream stream;
+    private TcpClient client;
+    public PrimeTimeService(
+      ILogger _logger, TcpListener _server) :
+        base(_logger, _server)
+    {
+      this.logger = _logger;
+      this.server = _server;
+      server.Start();
+    }
+    private static bool IsPrime(Decimal n)
+    {
+      if (n <= 1) return false;
+      for (int i = 2; i * i <= n; i++)
+        if (n % i == 0) return false;
+      return true;
+    }
+    public static string CreateIsPrimeMessage(Decimal number)
+    {
+      var message = """{"method": "isPrime", "prime": """ + (IsPrime(number) ? "true" : "false") + "}\n";
+      return message;
+    }
+    public void Dispose()
+    {
+      client.Close();
+      server.Stop();
+    }
+    public static string ParseIsPrimeMessage(string message)
+    {
+      string result;
+      JsonElement json = JsonDocument.Parse(message).RootElement;
+      bool methodIsPrime = "isPrime" == json.GetProperty("method").GetString();
+      decimal number = json.GetProperty("number").GetDecimal();
+      if (methodIsPrime)
+        return CreateIsPrimeMessage(number);
+      else
+        return "{}";
+    }
 
+    public void Process()
+    {
+      int i = 0;
+      string data;
+      Byte[] buffer = new Byte[65535];
+      String sendMessage = "";
+      var malformedResponse = System.Text.Encoding.ASCII.GetBytes("{}");
+      try
+      {
+        server.Start();
+        using(client = server.AcceptTcpClient())
+        using(stream = client.GetStream())
+        {
+          logger.LogInformation("Solve1");
+          while ((i = stream.Read(buffer, 0, buffer.Length)) != 0)
+          {
+            data = System.Text.Encoding.ASCII.GetString(buffer, 0, i);
+            logger.LogInformation($"Recv: {data}");
+            var datas = data.Split("\n").SkipLast(1).ToArray();
+            Array.ForEach(datas, data =>
+            {
+              try
+              {
+                if (0 != data.Length)
+                {
+                  // logger.LogInformation($"Processing: {data}\nSize: {data.Length}");
+                  // logger.LogInformation($"Send: {sendMessage}");
+                  sendMessage = ParseIsPrimeMessage(data);
+
+                  stream.Write(System.Text.Encoding.ASCII.GetBytes(sendMessage),
+                    0,
+                    System.Text.Encoding.ASCII.GetBytes(sendMessage).Length);
+                }
+              }
+              catch (System.Collections.Generic.KeyNotFoundException e)
+              {
+                logger.LogError(e.Message);
+                logger.LogInformation($"Send: {malformedResponse}");
+                stream.Write(malformedResponse, 0, malformedResponse.Length);
+                client.Close();
+              }
+              catch (System.Text.Json.JsonException e)
+              {
+                logger.LogError($"{e.GetType()}{e.Message}");
+                logger.LogInformation($"Send: {malformedResponse}");
+                stream.Write(malformedResponse, 0, malformedResponse.Length);
+                client.Close();
+              }
+            });
+          }
+        }
+      }
+      catch (SocketException e)
+      {
+        logger.LogCritical($"SocketException: {e.Message}");
+      }
+      finally
+      {
+        stream.Close();
+        client.Close();
+        if (server != null)
+        {
+          server.Stop();
+        }
+      }
+    }
+  }
   class Program
   {
     private static IPAddress localhost = IPAddress.Parse("0.0.0.0");
@@ -135,94 +242,15 @@ namespace ProtoHacker
         es.Process();
       }
     }
-    public static bool IsPrime(Decimal n)
-    {
-      if (n <= 1) return false;
-      for (int i = 2; i * i <= n; i++)
-      if (n % i == 0) return false;
-      return true;
-    }
-
-    public static string CreateIsPrimeMessage(Decimal number)
-    {
-      var message = """{"method": "isPrime", "prime": """ + (IsPrime(number) ? "true" : "false") + "}";
-      return message;
-    }
-
-    public static string ParseIsPrimeMessage(string message)
-    {
-      string result;
-      JsonElement json = JsonDocument.Parse(message).RootElement;
-      bool methodIsPrime = "isPrime" == json.GetProperty("method").GetString();
-      decimal number = json.GetProperty("number").GetDecimal();
-      if (methodIsPrime)
-        return CreateIsPrimeMessage(number);
-      else
-        return "{}";
-    }
 
     public static void Solve1(ILogger logger, TcpListener server, Int32 port)
     {
-      bool listen = true;
-      logger.LogInformation("Solve1");
-      try
-      {
-        var malformedResponse = System.Text.Encoding.ASCII.GetBytes("{}");
-        server.Start();
-        while (listen)
-        {
-          using TcpClient client = server.AcceptTcpClient();
-          String? data = null;
-          NetworkStream stream = client.GetStream();
-          int i;
-          Byte[] bytes = new Byte[4096];
-          while (listen && (i = stream.Read(bytes, 0, bytes.Length)) != 0)
-          {
-            data = System.Text.Encoding.ASCII.GetString(bytes, 0, i);
-            var datas = data.Split("\n");
-            Array.ForEach(datas, data =>
-            {
-              logger.LogInformation(data);
-              try
-              {
-                String sendMessage = ParseIsPrimeMessage(data);
-                logger.LogInformation($"Send: {sendMessage}");
-                stream.Write(System.Text.Encoding.ASCII.GetBytes(sendMessage),
-                  0,
-                  System.Text.Encoding.ASCII.GetBytes(sendMessage).Length);
-              }
-              catch (System.Collections.Generic.KeyNotFoundException e)
-              {
-                logger.LogError(e.Message);
-                logger.LogInformation($"Send: {malformedResponse}");
-                stream.Write(malformedResponse, 0, malformedResponse.Length);
-                client.Close();
-                listen = false;
-              }
-              catch (System.Text.Json.JsonException e)
-              {
-                logger.LogError($"{e.GetType()}{e.Message}");
-                logger.LogInformation($"Send: {malformedResponse}");
-                stream.Write(malformedResponse, 0, malformedResponse.Length);
-                client.Close();
-                listen = false;
-              }
-            });
-          }
-        }
-      }
-      catch (SocketException e)
-      {
-        logger.LogCritical("SocketException: {0}", e);
-      }
-      finally
-      {
-        if (server != null)
-        {
-          server.Stop();
-        }
+      var es = new PrimeTimeService(logger, server);
+      while(true) {
+        es.Process();
       }
     }
+
     public record InsertBankMessage(
       Int32 Timestamp,
       Int32 Price
@@ -231,6 +259,7 @@ namespace ProtoHacker
       Int32 MinTime,
       Int32 MaxTime
     );
+
     public static void Solve2(ILogger logger, TcpListener server, Int32 port)
     {
       var bankRecords = new ArrayList();
@@ -503,8 +532,8 @@ namespace ProtoHackerTests
         """{"method": "isPrime", "number": 33}"""
       ];
 
-      var encodedPrimeCases = primeCases.Select(c => System.Text.Encoding.ASCII.GetBytes(c)).ToArray();
-      var encodedCompositeCases = compositeCases.Select(c => System.Text.Encoding.ASCII.GetBytes(c)).ToArray();
+      var encodedPrimeCases = primeCases.Select(c => System.Text.Encoding.ASCII.GetBytes(c + "\n")).ToArray();
+      var encodedCompositeCases = compositeCases.Select(c => System.Text.Encoding.ASCII.GetBytes(c + "\n")).ToArray();
 
       var isPrimeExpected = """{"method": "isPrime", "prime": true}"""; // System.Text.Encoding.ASCII.GetBytes();
       var isCompositeExpected = """{"method": "isPrime", "prime": false}"""; // System.Text.Encoding.ASCII.GetBytes();
@@ -512,12 +541,12 @@ namespace ProtoHackerTests
 
       Array.ForEach(primeCases, expected =>
       {
-        Assert.That(Program.ParseIsPrimeMessage(expected), Is.EqualTo(isPrimeExpected));
+        Assert.That(PrimeTimeService.ParseIsPrimeMessage(expected), Is.EqualTo(isPrimeExpected +"\n"));
       });
 
       Array.ForEach(compositeCases, expected =>
       {
-        Assert.That(Program.ParseIsPrimeMessage(expected), Is.EqualTo(isCompositeExpected));
+        Assert.That(PrimeTimeService.ParseIsPrimeMessage(expected), Is.EqualTo(isCompositeExpected+"\n"));
       });
     }
   }
