@@ -92,8 +92,6 @@ namespace ProtoHacker
   public class PrimeTimeService : ProtoHackersService, IDisposable
   {
     private ILogger logger;
-    private Stream stream;
-    private TcpClient client;
     public PrimeTimeService(
       ILogger _logger, TcpListener _server) :
         base(_logger, _server)
@@ -231,7 +229,8 @@ namespace ProtoHacker
     {
       return content.Any(ch => char.IsControl(ch) && ch != '\r' && ch != '\n');
     }
-    async public static Task Solve0(ILogger logger, TcpListener server, Int32 port = 1045)
+
+    public static async Task Solve0(ILogger logger, TcpListener server, Int32 port = 1045)
     {
       var es = new SmokeTestService(logger, server);
       while (true)
@@ -240,10 +239,11 @@ namespace ProtoHacker
       }
     }
 
-    public static void Solve1(ILogger logger, TcpListener server, Int32 port)
+    public static async Task Solve1(ILogger logger, TcpListener server, Int32 port)
     {
       var es = new PrimeTimeService(logger, server);
-      while(true) {
+      while(true)
+      {
         es.Process();
       }
     }

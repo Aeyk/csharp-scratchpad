@@ -30,40 +30,10 @@
             @Html.DisplayFor(model => model.Name)
         </dd>
     </dl>
-    @foreach (var item in Model.Items) {
-    <tr>
-      <td>
-        @Html.DisplayFor(modelItem => item.Content)
-      </td>
-      <td>
-        @Html.DisplayFor(modelItem => item.State)
-      </td>
-      <td>
-        <a asp-action="Edit" asp-route-id="@item.Id">Edit</a> |
-        <a asp-action="Details" asp-route-id="@item.Id">Details</a> |
-        <a asp-action="Delete" asp-route-id="@item.Id">Delete</a>
-      </td>
-    </tr>
-    }
     
-
     @foreach (var item in Model.Items) {
-    <tr>
-      <td>
-        @Html.DisplayFor(modelItem => item.Content)
-      </td>
-      <td>
-        @Html.DisplayFor(modelItem => item.State)
-      </td>
-      }
-      <td>
-        <a asp-action="Edit" asp-route-id="@item.Id">Edit</a> |
-        <a asp-action="Details" asp-route-id="@item.Id">Details</a> |
-        <a asp-action="Delete" asp-route-id="@item.Id">Delete</a>
-      </td>
-    </tr>
+      @await Html.PartialAsync("../TodoItem/Details.cshtml", item)
     }
-
 </div>
 <div>
     <a asp-action="Edit" asp-route-id="@Model?.Id">Edit</a> |
