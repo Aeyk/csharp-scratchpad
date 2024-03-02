@@ -202,10 +202,6 @@ namespace ProtoHacker
     private static ILogger? logger;
     async static Task<int> Main(string[] args)
     {
-      using ILoggerFactory loggingFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole(options =>{
-        options.SingleLine = true;
-      }));
-      logger = loggingFactory.CreateLogger("ProtoHackers");
       if (args is null)
       {
         throw new ArgumentNullException(nameof(args));
@@ -214,6 +210,11 @@ namespace ProtoHacker
       if (args.Length >= 1 && null != args[0])
       {
         index = Int32.Parse(args[0]).ToString();
+        using ILoggerFactory loggingFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole(options =>
+        {
+          options.SingleLine = true;
+        }));
+        logger = loggingFactory.CreateLogger($"ph{index}");
         logger.LogDebug($"Number of arguments: {args.Length}, solution index: {index}, args[0]: {args[0]}, port: {port}");
       }
       TcpListener server = new TcpListener(localhost, port);
