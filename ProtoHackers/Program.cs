@@ -202,7 +202,9 @@ namespace ProtoHacker
     private static ILogger? logger;
     async static Task<int> Main(string[] args)
     {
-      using ILoggerFactory loggingFactory = LoggerFactory.Create(builder => builder.AddConsole());
+      using ILoggerFactory loggingFactory = LoggerFactory.Create(builder => builder.AddSimpleConsole(options =>{
+        options.SingleLine = true;
+      }));
       logger = loggingFactory.CreateLogger("ProtoHackers");
       if (args is null)
       {
