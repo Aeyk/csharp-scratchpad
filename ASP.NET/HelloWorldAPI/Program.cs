@@ -42,7 +42,12 @@ public class Program
       if (app.Environment.IsDevelopment())
       {
         app.UseSwagger();
-        app.UseSwaggerUI();
+        app.UseSwaggerUI(options =>
+          {
+            options.InjectStylesheet("/swagger/custom.css");
+            options.SwaggerEndpoint("/swagger/v1/swagger.json", "HelloWorldAPI v1");
+            options.RoutePrefix = "";
+          });
       }
 
       app.UseCors(options =>
