@@ -1,5 +1,8 @@
 using HelloWorldAPI.Helpers;
+using Microsoft.OpenApi.Models;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 namespace HelloWorldAPI;
 
@@ -26,9 +29,35 @@ public class Program
     // services.AddScoped<IUserRepository, UserRepository>();
     // services.AddScoped<IUserService, UserService>();
 
+    services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme);
+
     // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
     services.AddEndpointsApiExplorer()
-            .AddSwaggerGen();
+            .AddSwaggerGen(options => {
+              options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+              {
+                In = ParameterLocation.Header,
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                BearerFormat = "JWT",
+                Scheme = "Bearer",
+              });
+              options.AddSecurityRequirement(new OpenApiSecurityRequirement
+              {
+                {
+                  new OpenApiSecurityScheme
+                  {
+                    Reference = new OpenApiReference
+                    {
+                      Type=ReferenceType.SecurityScheme,
+                      Id="Bearer"
+                    }
+                  },
+                  new string[]{}
+                }
+              });
+            });
 
     var app = builder.Build();
     {
@@ -57,6 +86,8 @@ public class Program
 
       app.UseMiddleware<ErrorHandlerMiddleware>();
 
+      app.UseAuthentication();
+      
       app.UseAuthorization();
 
       app.MapControllers();
