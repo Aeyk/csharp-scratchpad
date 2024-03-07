@@ -1,8 +1,9 @@
+using HelloWorldAPI.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HelloWorldAPI.Controllers;
 
-[ApiController]
+[ApiController, Authorize]
 [Route("api/v1/weather")]
 [Produces("application/json")]
 public class WeatherForecastController : ControllerBase
@@ -18,14 +19,14 @@ public class WeatherForecastController : ControllerBase
   {
     _logger = logger;
   }
-  
+
   [HttpGet(Name = "GetWeatherForecast")]
-  public IEnumerable<WeatherForecast> Get()
+  public IEnumerable<WeatherForecast> Get(int v)
   {
     return Enumerable.Range(1, 5).Select(index => new WeatherForecast
     {
       Date = DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-      TemperatureC = Random.Shared.Next(-20, 55),
+      TemperatureC = v,
       Summary = Summaries[Random.Shared.Next(Summaries.Length)]
     })
     .ToArray();
