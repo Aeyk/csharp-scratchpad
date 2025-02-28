@@ -1,107 +1,115 @@
 using System.ComponentModel;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Keycloak.AuthServices.Sdk.Admin;
+using Keycloak.AuthServices.Sdk.Admin.Models;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
-[Route("api/v1/auth")]
-public class AuthenticationController(KeycloakAuthenticationService _authenticationService) : ControllerBase {
-    [HttpPost, Route("[action]")]
-    public IActionResult Login([FromBody] AuthenticationRequest req) {
+[Route("api/v1/auth/[action]")]
+public class AuthenticationController(KeycloakAuthenticationService _authenticationService) : ControllerBase
+{
+    [HttpPost]
+    public IActionResult Login([FromBody] AuthenticationRequest req)
+    {
         return Ok(_authenticationService.Authenticate(req));
     }
+
+    [HttpGet]
+    [Authorize(Policy = "Authenticated")]
+    public IActionResult Info()
+    {
+        Request.Headers.TryGetValue("Authorization", out var temp);
+        var jwt = temp.FirstOrDefault().Split(' ')[1];
+        if(null == jwt) return BadRequest(KeycloakAuthenticationService.Unauthenticated);
+        return Ok(_authenticationService.UserInfo(new JwtSecurityToken(jwt)));
+    }
 }
 
-public class KeycloakAuthenticationService(IHttpClientFactory _httpClientFactory, IConfiguration _config, ILogger<KeycloakAuthenticationService> _logger, JsonSerializerOptions _jsonSerializerOptions) {
-  public record AuthenticationResponse {
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    [JsonPropertyName("error")]
-    public String? Status {get; set;} = null;
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    [JsonPropertyName("error_description")]
-    public String? Message { get; set;} = null;
-    
-    [JsonPropertyName("access_token")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-
-    public string? AccessToken {get; set;} = null;
-    
-    [JsonPropertyName("expires_in")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    // [JsonConverter(typeof(DateTimeOffsetConverter))]
-    // public DateTimeOffset? Expiry {get; set;} = null;
-    public int Expiry {get; set;} = 60;
-
-    [JsonConverter(typeof(SplitStringConverter))]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    [JsonPropertyName("scope")]
-    public IEnumerable<string>? Scopes {get; set;} = null;
-    
-  }
-  public AuthenticationResponse Authenticate(AuthenticationRequest req) {
-    using var client = _httpClientFactory.CreateClient();
-    var postData = new FormUrlEncodedContent(new Dictionary<string, string> {
-        { "client_id",  _config["OIDC:ClientId"] },
-        { "client_secret",  _config["OIDC:ClientSecret"] },
-        { "grant_type",  "password" },
-        { "username",  req.Username },
-        { "password",  req.Password }
-    });
-    var result = client.PostAsync($"{_config["OIDC:Authority"]}/protocol/openid-connect/token", postData).GetAwaiter().GetResult().Content;
-    _logger.LogCritical(result.ReadAsStringAsync().GetAwaiter().GetResult());
-    var jsonString = JsonDocument.Parse(result.ReadAsStringAsync().GetAwaiter().GetResult());
-    var json = JsonSerializer.Deserialize<AuthenticationResponse>(jsonString, _jsonSerializerOptions);
-    return json;
-  }
-}
-
-class DateTimeOffsetConverter : JsonConverter<DateTimeOffset>
+public class KeycloakAuthenticationService(IHttpClientFactory _httpClientFactory, IConfiguration _config, ILogger<KeycloakAuthenticationService> _logger, JsonSerializerOptions _jsonSerializerOptions)
 {
-  private static readonly DateTimeOffset Epoch = new DateTimeOffset().LocalDateTime;
-  public override DateTimeOffset Read(ref Utf8JsonReader reader, System.Type typeToConvert, JsonSerializerOptions options)
-  {
-    var delta = reader.GetInt64();
-    try
+    public static AuthenticationResponse Unauthenticated = new AuthenticationResponse {
+        Status = "error", Message = "Unable to sign in. Check username and password. "
+    };
+    private AuthenticationResponse token;
+    public record AuthenticationResponse
     {
-      return DateTimeOffset.Now.AddSeconds(delta);
-    } catch (System.ArgumentOutOfRangeException){
-      return DateTimeOffset.Now;
-    }
-  }
-  public override void Write(Utf8JsonWriter writer, DateTimeOffset value, JsonSerializerOptions options)
-  {
-    long delta;
-    var now = new DateTimeOffset().LocalDateTime;
+        public AuthenticationResponse() {
+            ExpiresAt = DateTime.Now.AddSeconds(Expiry);
+        }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("error")]
+        public String? Status { get; set; } = null;
 
-     if(default == value) {
-      var now0 = TimeZoneInfo.ConvertTime(now, TimeZoneInfo.Local);
-      var value0 = value.LocalDateTime;
-       writer.WriteStringValue(now0 + now0.Subtract(value0));
-     } else {
-      writer.WriteStringValue(value);
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("error_description")]
+        public String? Message { get; set; } = null;
+
+        [JsonPropertyName("access_token")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+
+        public string? AccessToken { get; set; } = null;
+
+        [JsonPropertyName("expires_in")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        // [JsonConverter(typeof(DateTimeOffsetConverter))]
+        // public DateTimeOffset? Expiry {get; set;} = null;
+        public int Expiry { get; set; } = 0;
+
+        [JsonIgnore]
+        public DateTimeOffset ExpiresAt { get; set; }
+
+        [JsonConverter(typeof(SplitStringConverter))]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        [JsonPropertyName("scope")]
+        public IEnumerable<string>? Scopes { get; set; } = null;
+
     }
-  }
+    public AuthenticationResponse Authenticate(AuthenticationRequest req)
+    {
+        using var client = _httpClientFactory.CreateClient();
+        var postData = new FormUrlEncodedContent(new Dictionary<string, string> {
+            { "client_id",  _config["OIDC:ClientId"] },
+            { "client_secret",  _config["OIDC:ClientSecret"] },
+            { "scopes",  "openid" },
+            { "grant_type",  "password" },
+            { "username",  req.Username },
+            { "password",  req.Password }
+        });
+        var result = client.PostAsync($"{_config["OIDC:Authority"]}/protocol/openid-connect/token", postData).GetAwaiter().GetResult().Content;
+        _logger.LogTrace(result.ReadAsStringAsync().GetAwaiter().GetResult());
+        var jsonString = JsonDocument.Parse(result.ReadAsStringAsync().GetAwaiter().GetResult());
+        var json = JsonSerializer.Deserialize<AuthenticationResponse>(jsonString, _jsonSerializerOptions);
+        if(json == null || json.AccessToken == null) return Unauthenticated;
+        token = json;
+        return json;
+    }
+
+    public object UserInfo(JwtSecurityToken jwt)
+    {
+        // if(jwt == null || token.ExpiresAt >= DateTimeOffset.Now) return Unauthenticated;
+        using var client = _httpClientFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt.RawData);
+        var result = client.GetAsync($"{_config["OIDC:Authority"]}/protocol/openid-connect/userinfo").GetAwaiter().GetResult().Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        _logger.LogTrace(result);
+        return result;
+    }
 }
 
-public class SplitStringConverter : JsonConverter<IEnumerable<string>>
+public class AuthenticationService
 {
-    public override IEnumerable<string>? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    public bool Authenticate(AuthenticationRequest req)
     {
-        return reader.GetString().Split(" ");
-    }
-
-    public override void Write(Utf8JsonWriter writer, IEnumerable<string> value, JsonSerializerOptions options)
-    {
-        writer.WriteStringValue(string.Join(" ", value));
-    }
-}
-
-public class AuthenticationService {
-    public bool Authenticate(AuthenticationRequest req) {
-      if(req.Username == "me" && req.Password == "") {
-        return true;
-      }
-      return false;
+        if (req.Username == "me" && req.Password == "")
+        {
+            return true;
+        }
+        return false;
     }
 }
 
@@ -109,17 +117,60 @@ public class AuthenticationRequest
 {
     [JsonPropertyName("username")]
     [DefaultValue("me")]
-    public required string Username {get; set;}
+    public required string Username { get; set; }
 
     [JsonPropertyName("password")]
     [DefaultValue("********")]
-    public required string Password { get; set;}
+    public required string Password { get; set; }
 }
 
-public class AuthenticationResponse {
+public class AuthenticationResponse
+{
     [JsonPropertyName("status")]
-    public required string Status {get; set;}
+    public required string Status { get; set; }
 
     [JsonPropertyName("message")]
-    public required string Message { get; set;}
+    public required string Message { get; set; }
+}
+
+[Route("api/v1/auth/[action]")]
+public class UserController(UserService userService) : ControllerBase {
+    private readonly UserService userService = userService;
+    
+    [HttpPost]
+    public IActionResult Create(string Username, string? Password, IEnumerable<string> Roles, IEnumerable<string> Groups) {
+        if(userService.Create(Username, Password, Roles, Groups)) {
+            return Ok(new {status = "OK", message = $"{Username}:{Password}"});
+        } else return BadRequest();
+    }
+}
+
+public class UserService(IKeycloakClient keycloakClient) {
+    private readonly IKeycloakClient keycloakClient = keycloakClient;
+
+    public bool Create(string username, string? password, IEnumerable<string> roles, IEnumerable<string> groups) {
+        return (int)CreateKeycloakUser(username, password).Result.StatusCode == 200;
+    }
+
+    private string RandomPassword(int length = 8)
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        return new string(Enumerable.Repeat(chars, length)
+            .Select(s => s[RandomNumberGenerator.GetInt32(chars.Length)]).ToArray());
+    }
+    
+    private async Task<HttpResponseMessage> CreateKeycloakUser(string Username, string? Password) {
+        var user = new UserRepresentation() {
+            Username = Username,
+            Enabled = true,
+            Credentials = new CredentialRepresentation[] {
+                new CredentialRepresentation 
+                {
+                    Type = "password",
+                    SecretData = RandomPassword()
+                }
+            }
+        };
+        return await keycloakClient.CreateUserWithResponseAsync("develop", user);
+    }
 }

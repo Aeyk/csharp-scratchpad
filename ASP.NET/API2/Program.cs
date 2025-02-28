@@ -1,13 +1,24 @@
 using System.Net;
-using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Keycloak.AuthServices.Authentication;
 using Keycloak.AuthServices.Authorization;
+using Keycloak.AuthServices.Common;
 using Keycloak.AuthServices.Sdk;
+using Keycloak.AuthServices.Sdk.Admin;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+
+var jsonSerializerOptions =  new JsonSerializerOptions {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        NumberHandling = JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString,
+        WriteIndented = true,
+        IncludeFields = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+    };
 
 var config = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
@@ -16,36 +27,18 @@ var config = new ConfigurationBuilder()
     .Build();
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddHttpLogging();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddRouting(options => {
     options.LowercaseUrls = true;
 });
-
-builder.Services.AddControllers()
-.AddJsonOptions(options => {
-    new JsonSerializerOptions {
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        NumberHandling = JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString,
-        WriteIndented = true,
-        IncludeFields = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-    };
-});
-builder.Services.AddSingleton<JsonSerializerOptions>(
-    new JsonSerializerOptions {
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        NumberHandling = JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString,
-        WriteIndented = true,
-        IncludeFields = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-    });
+builder.Services.AddControllers();
+builder.Services.AddSingleton<JsonSerializerOptions>(jsonSerializerOptions);
 
 builder.Services.AddSwaggerGen(options => {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = @"JWT Authorization header using the Bearer scheme. 
+        Description = @"JWT Authorization header using the Bearer scheme.
 
 Enter your token in the text input below.",
          Name = "Authorization",
@@ -72,40 +65,59 @@ Enter your token in the text input below.",
         }
     });
 });
-builder.Services.AddKeycloakWebApiAuthentication(builder.Configuration, 
-    configSectionName: "IDP", 
-    configureJwtBearerOptions: options => {
-    options.TokenValidationParameters = new TokenValidationParameters() {
-        ValidateIssuer = false,
-        ValidateAudience = false,
-        SignatureValidator = delegate (string token, TokenValidationParameters parameters)
-        {
-            var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
-            var result = client.GetAsync($"{config["IDP:auth-server-url"]}/realms/develop/protocol/openid-connect/userinfo");
-            if(result.Result.StatusCode == HttpStatusCode.OK) {
-                return new JsonWebToken(token);
-            } else return null;
-        }
-    };
-}); 
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddKeycloakWebApi(builder.Configuration,
+    configureJwtBearerOptions: options =>
+    {
+        var client = new HttpClient();
+        options.TokenValidationParameters = new TokenValidationParameters() {
+            ValidAudiences = config.GetSection("Keycloak:Audiences").AsEnumerable().Select(c => c.Value),
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            SignatureValidator = delegate (string token, TokenValidationParameters parameters)
+            {
+                client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
+                var result = client.GetAsync($"{config["Keycloak:auth-server-url"]}/realms/develop/protocol/openid-connect/userinfo").GetAwaiter().GetResult();
+                if(result.StatusCode == HttpStatusCode.OK) {
+                    return new JsonWebToken(token);
+                } else return null;
+            }
+        };
+    });
+
 builder.Services.AddAuthorization(options => {
     options.AddPolicy("Authenticated", builder => {
         builder.RequireAuthenticatedUser();
     });
 })
-.AddKeycloakAuthorization(builder.Configuration, configSectionName: "IDP")
-.AddAuthorizationServer(builder.Configuration, configSectionName: "IDP");
+.AddKeycloakAuthorization(config)
+.AddAuthorizationServer(config);
+builder.Services.AddAuthorization();
 
-builder.Services.AddKeycloakAdminHttpClient(builder.Configuration, keycloakClientSectionName: "IDP");
+builder.Services.AddDistributedMemoryCache();
+builder.Services
+    .AddClientCredentialsTokenManagement()
+    .AddClient(
+        Constants.KeycloakClient, 
+        client =>
+        {
+            var options = config.GetKeycloakOptions<KeycloakAdminClientOptions>()!;
+            client.ClientId = options.Resource;
+            client.ClientSecret = options.Credentials.Secret;
+            client.TokenEndpoint = options.KeycloakTokenEndpoint;
+        });
 
-builder.Services.AddAuthorization(); 
+builder.Services
+    .AddKeycloakAdminHttpClient(config)
+    .AddClientCredentialsTokenHandler(Constants.KeycloakClient);
 
+builder.Services.AddSingleton<UserService>();
 builder.Services.AddScoped<KeycloakAuthenticationService>();
 
-builder.Services.AddHttpClient();
-
 var app = builder.Build();
+
+app.UseHttpLogging();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

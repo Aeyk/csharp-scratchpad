@@ -1,0 +1,15 @@
+{
+  "realm": "develop",
+  "auth-server-url": "https://keycloak.home.mksybr.com/",
+  "ssl-required": "external",
+  "resource": "testing",
+  "verify-token-audience": true,
+  "credentials": {
+    "secret": "S8fkwDJ3wCNRiiH1ylHuqyy0h6XkEPMw"
+  },
+  "use-resource-role-mappings": true,
+  "confidential-port": 0,
+  "policy-enforcer": {
+    "credentials": {}
+  }
+}
