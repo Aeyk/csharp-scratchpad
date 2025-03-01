@@ -6,9 +6,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Keycloak.AuthServices.Sdk.Admin;
 using Keycloak.AuthServices.Sdk.Admin.Models;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
 [Route("api/v1/auth/[action]")]
@@ -55,6 +54,10 @@ public class KeycloakAuthenticationService(IHttpClientFactory _httpClientFactory
 
         public string? AccessToken { get; set; } = null;
 
+        [JsonPropertyName("refresh_token")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? RefreshToken{ get; set; } = null;
+
         [JsonPropertyName("expires_in")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         // [JsonConverter(typeof(DateTimeOffsetConverter))]
@@ -82,7 +85,6 @@ public class KeycloakAuthenticationService(IHttpClientFactory _httpClientFactory
             { "password",  req.Password }
         });
         var result = client.PostAsync($"{_config["OIDC:Authority"]}/protocol/openid-connect/token", postData).GetAwaiter().GetResult().Content;
-        _logger.LogTrace(result.ReadAsStringAsync().GetAwaiter().GetResult());
         var jsonString = JsonDocument.Parse(result.ReadAsStringAsync().GetAwaiter().GetResult());
         var json = JsonSerializer.Deserialize<AuthenticationResponse>(jsonString, _jsonSerializerOptions);
         if(json == null || json.AccessToken == null) return Unauthenticated;
@@ -154,7 +156,7 @@ public class UserService(IKeycloakClient keycloakClient) {
 
     private string RandomPassword(int length = 8)
     {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`~!@#$%^&*()-=_+[]\\{}|;':\",.<>/?";
         return new string(Enumerable.Repeat(chars, length)
             .Select(s => s[RandomNumberGenerator.GetInt32(chars.Length)]).ToArray());
     }
@@ -171,6 +173,7 @@ public class UserService(IKeycloakClient keycloakClient) {
                 }
             }
         };
-        return await keycloakClient.CreateUserWithResponseAsync("develop", user);
+        var result = await keycloakClient.CreateUserWithResponseAsync("develop", user);
+        return result;
     }
 }

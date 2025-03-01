@@ -1,12 +1,16 @@
 using System.Net;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Duende.AccessTokenManagement;
 using Keycloak.AuthServices.Authentication;
 using Keycloak.AuthServices.Authorization;
 using Keycloak.AuthServices.Common;
 using Keycloak.AuthServices.Sdk;
 using Keycloak.AuthServices.Sdk.Admin;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -27,7 +31,10 @@ var config = new ConfigurationBuilder()
     .Build();
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddHttpLogging();
+builder.Services.ConfigureHttpClientDefaults(b => b.RedactLoggedHeaders([]));
+builder.Services.AddHttpLogging(options => {
+    options.LoggingFields = HttpLoggingFields.All;
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddRouting(options => {
     options.LowercaseUrls = true;
@@ -66,7 +73,8 @@ Enter your token in the text input below.",
     });
 });
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddKeycloakWebApi(builder.Configuration,
     configureJwtBearerOptions: options =>
     {
@@ -84,16 +92,34 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 } else return null;
             }
         };
+        
+        // Capture the JWT and store it as a claim
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                if (context.SecurityToken is System.IdentityModel.Tokens.Jwt.JwtSecurityToken jwtToken)
+                {
+                    var claimsIdentity = context.Principal?.Identity as ClaimsIdentity;
+                    claimsIdentity?.AddClaim(new Claim("jwt", jwtToken.RawData));
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization(options => {
-    options.AddPolicy("Authenticated", builder => {
-        builder.RequireAuthenticatedUser();
+    options.AddPolicy("Authenticated", policy => {
+        policy.RequireAssertion(context => null != context.User || context.User.HasClaim(c => c.Type == "jwt"));
     });
 })
 .AddKeycloakAuthorization(config)
-.AddAuthorizationServer(config);
-builder.Services.AddAuthorization();
+.AddAuthorizationBuilder()
+
+;
+// .AddAuthorizationServer(config);
+
 
 builder.Services.AddDistributedMemoryCache();
 builder.Services
@@ -107,7 +133,7 @@ builder.Services
             client.ClientSecret = options.Credentials.Secret;
             client.TokenEndpoint = options.KeycloakTokenEndpoint;
         });
-
+        
 builder.Services
     .AddKeycloakAdminHttpClient(config)
     .AddClientCredentialsTokenHandler(Constants.KeycloakClient);
