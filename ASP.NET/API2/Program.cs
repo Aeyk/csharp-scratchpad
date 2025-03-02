@@ -11,6 +11,7 @@ using Keycloak.AuthServices.Sdk.Admin;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.HttpLogging;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -34,6 +35,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.ConfigureHttpClientDefaults(b => b.RedactLoggedHeaders([]));
 builder.Services.AddHttpLogging(options => {
     options.LoggingFields = HttpLoggingFields.All;
+    options.CombineLogs = true;
+    options.MediaTypeOptions.AddText("application/json");
+    options.MediaTypeOptions.AddText("multipart/form-data");
+
+
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddRouting(options => {
@@ -133,13 +139,23 @@ builder.Services
             client.ClientSecret = options.Credentials.Secret;
             client.TokenEndpoint = options.KeycloakTokenEndpoint;
         });
-        
+
+// builder.Services.AddClientCredentialsHttpClient(Constants.KeycloakClient, Constants.KeycloakClient, client => {
+//     client.BaseAddress = new Uri(config["Keycloak:auth-server-url"]);
+// });
+
+builder.Services.AddSingleton<UserService>();
+// builder.Services.AddSingleton<IKeycloakClient>(sp => {
+//     var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+//     var httpClient = httpClientFactory.CreateClient(Constants.KeycloakClient);
+//     httpClient.BaseAddress = new Uri(config["Keycloak:auth-server-url"]);
+//     return new KeycloakClient(httpClient);
+// });
+builder.Services.AddScoped<KeycloakAuthenticationService>();
+
 builder.Services
     .AddKeycloakAdminHttpClient(config)
     .AddClientCredentialsTokenHandler(Constants.KeycloakClient);
-
-builder.Services.AddSingleton<UserService>();
-builder.Services.AddScoped<KeycloakAuthenticationService>();
 
 var app = builder.Build();
 

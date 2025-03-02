@@ -169,7 +169,7 @@ public class UserService(IKeycloakClient keycloakClient) {
                 new CredentialRepresentation 
                 {
                     Type = "password",
-                    SecretData = RandomPassword()
+                    Value = RandomPassword()
                 }
             }
         };
