@@ -2,19 +2,19 @@ using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Duende.AccessTokenManagement;
 using Keycloak.AuthServices.Authentication;
 using Keycloak.AuthServices.Authorization;
 using Keycloak.AuthServices.Common;
 using Keycloak.AuthServices.Sdk;
-using Keycloak.AuthServices.Sdk.Admin;
+using static Keycloak.AuthServices.Sdk.Kiota.Admin.KeycloakAdminApiClient;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.HttpLogging;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Routing.Matching;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
+
 
 var jsonSerializerOptions =  new JsonSerializerOptions {
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
@@ -38,9 +38,8 @@ builder.Services.AddHttpLogging(options => {
     options.CombineLogs = true;
     options.MediaTypeOptions.AddText("application/json");
     options.MediaTypeOptions.AddText("multipart/form-data");
-
-
 });
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddRouting(options => {
     options.LowercaseUrls = true;
@@ -115,17 +114,19 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization(options => {
-    options.AddPolicy("Authenticated", policy => {
-        policy.RequireAssertion(context => null != context.User || context.User.HasClaim(c => c.Type == "jwt"));
-    });
-})
-.AddKeycloakAuthorization(config)
-.AddAuthorizationBuilder()
-
-;
-// .AddAuthorizationServer(config);
-
+builder.Services
+    .AddAuthorization(async options => 
+    {
+        options.AddPolicy("Authenticated", policy => {
+            policy.AddRequirements([
+                new AssertionRequirement(
+                    context => context.User.Identities.Any(i => i.IsAuthenticated) ||
+                    context.User.HasClaim(c => c.Type == "jwt" && c.Value != null ))]);
+            
+        });
+    })
+    .AddKeycloakAuthorization(config)
+    .AddAuthorizationBuilder();
 
 builder.Services.AddDistributedMemoryCache();
 builder.Services
@@ -140,21 +141,19 @@ builder.Services
             client.TokenEndpoint = options.KeycloakTokenEndpoint;
         });
 
-// builder.Services.AddClientCredentialsHttpClient(Constants.KeycloakClient, Constants.KeycloakClient, client => {
-//     client.BaseAddress = new Uri(config["Keycloak:auth-server-url"]);
-// });
-
 builder.Services.AddSingleton<UserService>();
-// builder.Services.AddSingleton<IKeycloakClient>(sp => {
-//     var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
-//     var httpClient = httpClientFactory.CreateClient(Constants.KeycloakClient);
-//     httpClient.BaseAddress = new Uri(config["Keycloak:auth-server-url"]);
-//     return new KeycloakClient(httpClient);
-// });
 builder.Services.AddScoped<KeycloakAuthenticationService>();
+builder.Services.AddUserAccessTokenHttpClient(Constants.KeycloakUserClient, configureClient: client => 
+{
+    client.BaseAddress = new Uri(config["Keycloak:auth-server-url"]);
+});
 
-builder.Services
-    .AddKeycloakAdminHttpClient(config)
+Keycloak.AuthServices.Sdk.Kiota.ServiceCollectionExtensions
+    .AddKeycloakAdminHttpClient(builder.Services, config)
+    .AddClientCredentialsTokenHandler(Constants.KeycloakClient);
+
+Keycloak.AuthServices.Sdk.ServiceCollectionExtensions
+    .AddKeycloakAdminHttpClient(builder.Services, config)
     .AddClientCredentialsTokenHandler(Constants.KeycloakClient);
 
 var app = builder.Build();

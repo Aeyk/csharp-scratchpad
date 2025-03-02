@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -135,25 +136,24 @@ public class AuthenticationResponse
     public required string Message { get; set; }
 }
 
-[Route("api/v1/auth/[action]")]
+[Route("api/v1/user/[action]")]
 public class UserController(UserService userService) : ControllerBase {
     private readonly UserService userService = userService;
     
+    [Authorize(Roles = "view-users")]
     [HttpPost]
     public IActionResult Create(string Username, string? Password, IEnumerable<string> Roles, IEnumerable<string> Groups) {
-        if(userService.Create(Username, Password, Roles, Groups)) {
-            return Ok(new {status = "OK", message = $"{Username}:{Password}"});
-        } else return BadRequest();
+        return Ok(new {
+            status = userService.Create(Username, Password, Roles, Groups).GetAwaiter().GetResult().StatusCode
+        });
+        
     }
 }
 
+
+
 public class UserService(IKeycloakClient keycloakClient) {
     private readonly IKeycloakClient keycloakClient = keycloakClient;
-
-    public bool Create(string username, string? password, IEnumerable<string> roles, IEnumerable<string> groups) {
-        return (int)CreateKeycloakUser(username, password).Result.StatusCode == 200;
-    }
-
     private string RandomPassword(int length = 8)
     {
         const string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`~!@#$%^&*()-=_+[]\\{}|;':\",.<>/?";
@@ -161,7 +161,7 @@ public class UserService(IKeycloakClient keycloakClient) {
             .Select(s => s[RandomNumberGenerator.GetInt32(chars.Length)]).ToArray());
     }
     
-    private async Task<HttpResponseMessage> CreateKeycloakUser(string Username, string? Password) {
+    public async Task<HttpResponseMessage> Create(string Username, string? Password, IEnumerable<string>? roles, IEnumerable<string>? groups) {
         var user = new UserRepresentation() {
             Username = Username,
             Enabled = true,
