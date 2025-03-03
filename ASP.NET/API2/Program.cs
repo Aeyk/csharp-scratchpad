@@ -14,16 +14,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Routing.Matching;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
-
-
-var jsonSerializerOptions =  new JsonSerializerOptions {
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        NumberHandling = JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString,
-        WriteIndented = true,
-        IncludeFields = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-    };
+using Microsoft.Extensions.Http.Logging;
 
 var config = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
@@ -32,100 +23,29 @@ var config = new ConfigurationBuilder()
     .Build();
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.ConfigureHttpClientDefaults(b => b.RedactLoggedHeaders([]));
-builder.Services.AddHttpLogging(options => {
-    options.LoggingFields = HttpLoggingFields.All;
-    options.CombineLogs = true;
-    options.MediaTypeOptions.AddText("application/json");
-    options.MediaTypeOptions.AddText("multipart/form-data");
-});
+builder.Services.ConfigureHttpClientDefaults(b => b.RedactLoggedHeaders(_ => false));
+
+builder.Services.AddHttpLogging(configureHttpLogging);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddRouting(options => {
     options.LowercaseUrls = true;
 });
 builder.Services.AddControllers();
-builder.Services.AddSingleton<JsonSerializerOptions>(jsonSerializerOptions);
+builder.Services.AddSingleton<JsonSerializerOptions>(Constants.DefaultJsonSerializerOptions);
 
 builder.Services.AddSwaggerGen(options => {
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = @"JWT Authorization header using the Bearer scheme.
-
-Enter your token in the text input below.",
-         Name = "Authorization",
-         In = ParameterLocation.Header,
-         Type = SecuritySchemeType.Http,
-         Scheme = "Bearer",
-    });
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                },
-                Scheme = "oauth2",
-                Name = "Bearer",
-                In = ParameterLocation.Header,
-
-            },
-            new List<string>()
-        }
-    });
+    options.AddSecurityDefinition("Bearer", Constants.KeycloakSecurityScheme);
+    options.AddSecurityRequirement(Constants.KeycloakSecurityRequirement);
 });
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddKeycloakWebApi(builder.Configuration,
-    configureJwtBearerOptions: options =>
-    {
-        var client = new HttpClient();
-        options.TokenValidationParameters = new TokenValidationParameters() {
-            ValidAudiences = config.GetSection("Keycloak:Audiences").AsEnumerable().Select(c => c.Value),
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            SignatureValidator = delegate (string token, TokenValidationParameters parameters)
-            {
-                client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
-                var result = client.GetAsync($"{config["Keycloak:auth-server-url"]}/realms/develop/protocol/openid-connect/userinfo").GetAwaiter().GetResult();
-                if(result.StatusCode == HttpStatusCode.OK) {
-                    return new JsonWebToken(token);
-                } else return null;
-            }
-        };
-        
-        // Capture the JWT and store it as a claim
-        options.Events = new JwtBearerEvents
-        {
-            OnTokenValidated = context =>
-            {
-                if (context.SecurityToken is System.IdentityModel.Tokens.Jwt.JwtSecurityToken jwtToken)
-                {
-                    var claimsIdentity = context.Principal?.Identity as ClaimsIdentity;
-                    claimsIdentity?.AddClaim(new Claim("jwt", jwtToken.RawData));
-                }
-
-                return Task.CompletedTask;
-            }
-        };
-    });
+    configureJwtBearerOptions: configureKeycloakHttpClient);
 
 builder.Services
-    .AddAuthorization(async options => 
-    {
-        // options.AddPolicy("Authenticated", policy => {
-        //     policy.AddRequirements(new Microsoft.AspNetCore.Authorization.IAuthorizationRequirement[] {
-        //         new AssertionRequirement(
-        //             context => context.User.Identity != null &&  
-        //             context.User.Identities.Any(i => i.IsAuthenticated) ||
-        //             context.User.HasClaim(c => c.Type == "jwt"))});
-            
-        // });
-    })
+    .AddAuthorization()
     .AddKeycloakAuthorization(config)
     .AddAuthorizationBuilder();
 
@@ -151,11 +71,14 @@ builder.Services.AddUserAccessTokenHttpClient(Constants.KeycloakUserClient, conf
 
 Keycloak.AuthServices.Sdk.Kiota.ServiceCollectionExtensions
     .AddKeycloakAdminHttpClient(builder.Services, config)
-    .AddClientCredentialsTokenHandler(Constants.KeycloakClient);
+    .AddClientCredentialsTokenHandler(Constants.KeycloakClient)
+    
+    ;
 
 Keycloak.AuthServices.Sdk.ServiceCollectionExtensions
     .AddKeycloakAdminHttpClient(builder.Services, config)
-    .AddClientCredentialsTokenHandler(Constants.KeycloakClient);
+    .AddClientCredentialsTokenHandler(Constants.KeycloakClient)
+    ;
 
 var app = builder.Build();
 

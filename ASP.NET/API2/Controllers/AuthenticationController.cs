@@ -21,7 +21,7 @@ public class AuthenticationController(KeycloakAuthenticationService _authenticat
     }
 
     [HttpGet]
-    [Authorize(Policy = "Authenticated")]
+    [Authorize]
     public IActionResult Info()
     {
         Request.Headers.TryGetValue("Authorization", out var temp);
@@ -140,7 +140,7 @@ public class AuthenticationResponse
 public class UserController(UserService userService) : ControllerBase {
     private readonly UserService userService = userService;
     
-    [Authorize(Roles = "view-users")]
+    [Authorize(Roles = "manage-users")]
     [HttpPost]
     public IActionResult Create(string Username, string? Password, IEnumerable<string> Roles, IEnumerable<string> Groups) {
         return Ok(new {
