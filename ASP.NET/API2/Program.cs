@@ -117,13 +117,14 @@ builder.Services
 builder.Services
     .AddAuthorization(async options => 
     {
-        options.AddPolicy("Authenticated", policy => {
-            policy.AddRequirements([
-                new AssertionRequirement(
-                    context => context.User.Identities.Any(i => i.IsAuthenticated) ||
-                    context.User.HasClaim(c => c.Type == "jwt" && c.Value != null ))]);
+        // options.AddPolicy("Authenticated", policy => {
+        //     policy.AddRequirements(new Microsoft.AspNetCore.Authorization.IAuthorizationRequirement[] {
+        //         new AssertionRequirement(
+        //             context => context.User.Identity != null &&  
+        //             context.User.Identities.Any(i => i.IsAuthenticated) ||
+        //             context.User.HasClaim(c => c.Type == "jwt"))});
             
-        });
+        // });
     })
     .AddKeycloakAuthorization(config)
     .AddAuthorizationBuilder();
