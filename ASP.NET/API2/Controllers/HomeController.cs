@@ -6,10 +6,10 @@ namespace API2.Controllers;
 
 [ApiController]
 [Route("[controller]/[action]")]
-[Authorize(Policy = "Authenticated")]
+[Authorize]
 public class HomeController : ControllerBase
 {
-    private readonly ILogger<HomeController> _logger;
+private readonly ILogger<HomeController> _logger;
 
     public HomeController(ILogger<HomeController> logger)
     {
@@ -35,6 +35,19 @@ public class HomeController : ControllerBase
         return new Dictionary<string, IEnumerable<string>>()
         {
             {"groups", claims },
+        };
+    }
+
+    [HttpGet]
+    public IDictionary<string, IEnumerable<string>> Roles() {
+        ArraySegment<string> claims = (HttpContext.User.Identity as ClaimsIdentity ?? new ClaimsIdentity())
+            .Claims
+            .Where(c => c.Type == "roles")
+            .Select(c => c.Value)
+            .ToArray() ;
+        return new Dictionary<string, IEnumerable<string>>()
+        {
+            {"roles", claims },
         };
     }
 

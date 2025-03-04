@@ -15,6 +15,8 @@ using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Routing.Matching;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.Extensions.Http.Logging;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using API2.Components;
 
 var config = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
@@ -23,9 +25,13 @@ var config = new ConfigurationBuilder()
     .Build();
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
+
 builder.Services.ConfigureHttpClientDefaults(b => b.RedactLoggedHeaders(_ => false));
 
-builder.Services.AddHttpLogging(configureHttpLogging);
+builder.Services.AddHttpLogging(Constants.configureHttpLogging);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddRouting(options => {
@@ -42,7 +48,13 @@ builder.Services.AddSwaggerGen(options => {
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddKeycloakWebApi(builder.Configuration,
-    configureJwtBearerOptions: configureKeycloakHttpClient);
+    configureJwtBearerOptions: Constants.ConfigureKeycloakHttpClient(config));
+
+// builder.Services
+//     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+//     .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme,
+//     options => {
+//     });
 
 builder.Services
     .AddAuthorization()
@@ -63,7 +75,9 @@ builder.Services
         });
 
 builder.Services.AddSingleton<UserService>();
+builder.Services.AddSingleton<TaskContext>();
 builder.Services.AddScoped<KeycloakAuthenticationService>();
+builder.Services.AddOpenIdConnectAccessTokenManagement();
 builder.Services.AddUserAccessTokenHttpClient(Constants.KeycloakUserClient, configureClient: client => 
 {
     client.BaseAddress = new Uri(config["Keycloak:auth-server-url"]);
@@ -71,14 +85,11 @@ builder.Services.AddUserAccessTokenHttpClient(Constants.KeycloakUserClient, conf
 
 Keycloak.AuthServices.Sdk.Kiota.ServiceCollectionExtensions
     .AddKeycloakAdminHttpClient(builder.Services, config)
-    .AddClientCredentialsTokenHandler(Constants.KeycloakClient)
-    
-    ;
+    .AddClientCredentialsTokenHandler(Constants.KeycloakClient);
 
 Keycloak.AuthServices.Sdk.ServiceCollectionExtensions
     .AddKeycloakAdminHttpClient(builder.Services, config)
-    .AddClientCredentialsTokenHandler(Constants.KeycloakClient)
-    ;
+    .AddClientCredentialsTokenHandler(Constants.KeycloakClient);
 
 var app = builder.Build();
 
@@ -99,5 +110,12 @@ app.UseAuthorization();
 
 app.MapControllerRoute(name: "default",
     pattern: "{controller:lowercase}/{action:lowercase}");
+
+    
+app.UseAntiforgery();
+
+app.MapStaticAssets();
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
 
 app.Run();

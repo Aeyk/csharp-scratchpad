@@ -2,12 +2,13 @@ using System.ComponentModel;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Keycloak.AuthServices.Sdk.Admin;
 using Keycloak.AuthServices.Sdk.Admin.Models;
-
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,9 +16,9 @@ using Microsoft.AspNetCore.Mvc;
 public class AuthenticationController(KeycloakAuthenticationService _authenticationService) : ControllerBase
 {
     [HttpPost]
-    public IActionResult Login([FromBody] AuthenticationRequest req)
+    public Task<KeycloakAuthenticationService.AuthenticationResponse> LoginAsync([FromBody] AuthenticationRequest req)
     {
-        return Ok(_authenticationService.Authenticate(req));
+        return _authenticationService.AuthenticateAsync(req);
     }
 
     [HttpGet]
@@ -74,9 +75,9 @@ public class KeycloakAuthenticationService(IHttpClientFactory _httpClientFactory
         public IEnumerable<string>? Scopes { get; set; } = null;
 
     }
-    public AuthenticationResponse Authenticate(AuthenticationRequest req)
+    public async Task<AuthenticationResponse> AuthenticateAsync(AuthenticationRequest req)
     {
-        using var client = _httpClientFactory.CreateClient();
+        using var client = _httpClientFactory.CreateClient(Constants.KeycloakUserClient);
         var postData = new FormUrlEncodedContent(new Dictionary<string, string> {
             { "client_id",  _config["OIDC:ClientId"] },
             { "client_secret",  _config["OIDC:ClientSecret"] },
@@ -96,23 +97,11 @@ public class KeycloakAuthenticationService(IHttpClientFactory _httpClientFactory
     public object UserInfo(JwtSecurityToken jwt)
     {
         // if(jwt == null || token.ExpiresAt >= DateTimeOffset.Now) return Unauthenticated;
-        using var client = _httpClientFactory.CreateClient();
+        using var client = _httpClientFactory.CreateClient(Constants.KeycloakUserClient);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt.RawData);
         var result = client.GetAsync($"{_config["OIDC:Authority"]}/protocol/openid-connect/userinfo").GetAwaiter().GetResult().Content.ReadAsStringAsync().GetAwaiter().GetResult();
         _logger.LogTrace(result);
         return result;
-    }
-}
-
-public class AuthenticationService
-{
-    public bool Authenticate(AuthenticationRequest req)
-    {
-        if (req.Username == "me" && req.Password == "")
-        {
-            return true;
-        }
-        return false;
     }
 }
 
@@ -142,11 +131,16 @@ public class UserController(UserService userService) : ControllerBase {
     
     [Authorize(Roles = "manage-users")]
     [HttpPost]
-    public IActionResult Create(string Username, string? Password, IEnumerable<string> Roles, IEnumerable<string> Groups) {
-        return Ok(new {
-            status = userService.Create(Username, Password, Roles, Groups).GetAwaiter().GetResult().StatusCode
-        });
-        
+    [DefaultValue("""
+    {
+        "username": "test",
+        "credentials": [{
+            "value": "password_change_me"
+        }]
+    }
+    """)]
+    public async Task<HttpResponseMessage> Create([FromBody] UserRepresentation user) {
+        return await userService.Create(user);
     }
 }
 
@@ -161,18 +155,7 @@ public class UserService(IKeycloakClient keycloakClient) {
             .Select(s => s[RandomNumberGenerator.GetInt32(chars.Length)]).ToArray());
     }
     
-    public async Task<HttpResponseMessage> Create(string Username, string? Password, IEnumerable<string>? roles, IEnumerable<string>? groups) {
-        var user = new UserRepresentation() {
-            Username = Username,
-            Enabled = true,
-            Credentials = new CredentialRepresentation[] {
-                new CredentialRepresentation 
-                {
-                    Type = "password",
-                    Value = RandomPassword()
-                }
-            }
-        };
+    public async Task<HttpResponseMessage> Create(UserRepresentation user) {
         var result = await keycloakClient.CreateUserWithResponseAsync("develop", user);
         return result;
     }

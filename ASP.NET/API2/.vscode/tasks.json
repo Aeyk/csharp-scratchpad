@@ -2,6 +2,23 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "build-ui",
+            "request": "launch",
+            "command": "npm",
+            "args": [
+                "run", 
+                "build"
+            ],
+            "type": "process",
+            "serverReadyAction": {
+            "action": "debugWithChrome",
+            "pattern": "Local: http://localhost:([0-9]+)",
+            "uriFormat": "http://localhost:%s",
+            
+            },
+            "options": { "cwd": "${workspaceFolder}/ui" } 
+        },
+        {
             "label": "build",
             "command": "dotnet",
             "type": "process",
