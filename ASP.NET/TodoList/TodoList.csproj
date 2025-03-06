@@ -8,13 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Update="app.db" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
-  </ItemGroup>
-
-  <ItemGroup>
 
     <PackageReference Include="Duende.AccessTokenManagement.OpenIdConnect" Version="3.2.0" />
     <PackageReference Include="Duende.AccessTokenManagement" Version="3.2.0" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.74" />
+    <PackageReference Include="HtmlAgilityPack.CssSelectors" Version="1.0.2" />
     <PackageReference Include="Keycloak.AuthServices.Authentication" Version="2.6.0" />
     <PackageReference Include="Keycloak.AuthServices.Authorization" Version="2.6.0" />
     <PackageReference Include="Keycloak.AuthServices.Sdk.Kiota" Version="26.0.5" />
@@ -31,6 +29,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>    
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.2" />
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="9.0.0" />
     <PackageReference Include="OpenIddict.AspNetCore" Version="6.1.1" />
@@ -39,6 +38,15 @@
     <PackageReference Include="OpenIddict.Core" Version="6.1.1" />
     <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="6.1.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <_ContentIncludedByDefault Remove="Views\JobApplicationController2\Create.cshtml" />
+    <_ContentIncludedByDefault Remove="Views\JobApplicationController2\Delete.cshtml" />
+    <_ContentIncludedByDefault Remove="Views\JobApplicationController2\Details.cshtml" />
+    <_ContentIncludedByDefault Remove="Views\JobApplicationController2\Edit.cshtml" />
+    <_ContentIncludedByDefault Remove="Views\JobApplicationController2\Index.cshtml" />
+    <_ContentIncludedByDefault Remove="Views\JobApplicationController2\_ViewImports.cshtml" />
   </ItemGroup>
 
 </Project>

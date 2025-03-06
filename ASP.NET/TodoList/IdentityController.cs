@@ -4,10 +4,17 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using OpenIddict.Abstractions;
 using OpenIddict.Client.AspNetCore;
+using TodoList.Data;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 [Route("api/v1/auth")]
 public class IdentityController : ControllerBase {
+    private readonly ApplicationDbContext _context;
+
+    public IdentityController(ApplicationDbContext context) {
+        _context = context;
+    }
+
     [Route("login/keycloak")]
     [HttpGet]
     public async Task<ActionResult> LoginWithKeycloak() {

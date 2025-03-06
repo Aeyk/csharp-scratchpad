@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using System.Net;
 using Keycloak.AuthServices.Sdk;
 using Keycloak.AuthServices.Common;
+using TodoList.Services;
 
 var config = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
@@ -22,6 +23,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddRouting(options => {
     options.LowercaseUrls = true;
+    options.LowercaseQueryStrings = true;
 });
 builder.Services.AddControllers();
 
@@ -39,7 +41,10 @@ builder.Services.AddDbContext<ApplicationDbContext>(options => {
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
+builder.Services.AddDefaultIdentity<IdentityUser>(options => 
+    { 
+        // options.SignIn.RequireConfirmedAccount = true;
+    })
     .AddEntityFrameworkStores<ApplicationDbContext>();
 
 builder.Services.AddRazorPages();
@@ -83,7 +88,12 @@ builder.Services.AddOpenIddict()
     });
 
 builder.Services
-    .AddAuthorization()
+    .AddAuthorization(options => {
+        options.AddPolicy("Authenticated", policy => {
+            policy.RequireAuthenticatedUser();
+        });
+        options.DefaultPolicy = options.GetPolicy("Authenticated");
+    })
     .AddKeycloakAuthorization(config)
     .AddAuthorizationBuilder();
 
@@ -99,6 +109,8 @@ builder.Services
             client.ClientSecret = options.Credentials.Secret;
             client.TokenEndpoint = options.KeycloakTokenEndpoint;
         });
+
+builder.Services.AddScoped<DocumentService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -131,6 +143,7 @@ app.MapRazorPages()
    .WithStaticAssets();
 app.MapDefaultControllerRoute();
 app.MapControllerRoute(name: "default",
-    pattern: "{controller:lowercase}/{action:lowercase}");
+    // pattern: "api/v{version}/{controller:lowercase}/{action:lowercase}");
+    pattern: "api/v{version}/{controller}/{action}");
     
 app.Run();

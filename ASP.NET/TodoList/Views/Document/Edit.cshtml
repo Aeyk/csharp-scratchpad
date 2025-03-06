@@ -1,0 +1,60 @@
+@model TodoList.Models.Document
+
+@{
+    ViewData["Title"] = "Edit";
+    Layout = "_Layout";
+}
+
+<h1>Edit</h1>
+
+<h4>Part</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-group">
+                <div id="PartTemplate" class="form-group" style="display:none">
+                    <label asp-for="Parts" class="control-label" disabled></label>
+                    <input asp-for="Parts" class="form-control" disabled/>
+                </div>
+                @for(var i = 0; i < Model?.Parts?.Count; i++) {
+                    <div id="EditPart" class="form-group">
+                        <label asp-for="Parts[i].Content" class="control-label"></label>
+                        <input asp-for="Parts[i].Content" class="form-control"/>
+                    </div>
+                }
+            </div>
+            <div class="form-group" id="AddPartWrapper">
+            </div>
+            <div class="form-group">
+                <input id="AddPart" type="button" value="Add Part" class="btn btn-primary" />
+                <input type="submit" value="Save" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Back to List</a>
+</div>
+
+@section Scripts {
+<script>
+    var template = document.querySelector("#PartTemplate");
+    document.querySelector("#AddPart").addEventListener("click", e => {
+        var count = document.querySelectorAll("#EditPart input").length;
+        var add = template.cloneNode(true)
+        add.style.display = "block"
+        add.querySelectorAll("input,label").forEach(elem => {
+            elem.name = elem.name + `[${count}]` + ".Content"
+            elem.id = elem.id + `[${count}]` + ".Content"
+            elem.disabled = false;
+            console.log(elem.name);
+        });
+        e.target.parentNode.appendChild(add)
+        count++
+    })
+</script>
+}

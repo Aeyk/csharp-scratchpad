@@ -1,0 +1,34 @@
+@model TodoList.Models.Document
+
+@{
+    ViewData["Title"] = "Details";
+    Layout = "_Layout";
+}
+
+<h1>Details</h1>
+
+<div>
+    <h4>Part</h4>
+    <hr />
+    <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.Id)
+        </dt>
+        <dd class = "col-sm-6">
+            @Html.DisplayFor(model => model.Owner)
+        </dd>
+        <dd class = "col-sm-6">
+            @Html.DisplayFor(model => model.Parts)
+            @for(var i = 0; i < (Model?.Parts?.Count ?? 0); i++) {
+                <div id="EditPart" class="form-group">
+                    <label asp-for="Parts[i].Content" class="control-label"></label>
+                    <input asp-for="Parts[i].Content" class="form-control" readonly="readonly" disabled="disabled"/>
+                </div>
+            }
+        </dd>
+    </dl>
+</div>
+<div>
+    <a asp-action="Edit" asp-route-id="@Model?.Id">Edit</a> |
+    <a asp-action="Index">Back to List</a>
+</div>

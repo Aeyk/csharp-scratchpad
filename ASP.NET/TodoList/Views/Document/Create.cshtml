@@ -1,0 +1,71 @@
+@using TodoList.Models
+@model TodoList.Models.Document
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    ViewData["Title"] = "Create";
+    Layout = "_Layout";
+}
+
+<h1>Create</h1>
+
+<h4>Part</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Create">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <div class="form-group">
+                <label asp-for="Owner" class="control-label"></label>
+                <input asp-for="Owner" class="form-control" readonly="readonly" disabled="disabled"
+                    value="@User.Identity?.Name" />
+
+                <label asp-for="Parts" class="control-label"></label>
+                
+                <div class="form-group">
+                    <div id="PartTemplate" class="form-group" style="display:none">
+                        <label asp-for="Parts" class="control-label" disabled></label>
+                        <input asp-for="Parts" class="form-control" disabled/>
+                    </div>
+                    @for(var i = 0; i < Model?.Parts?.Count; i++) {
+                    <div class="form-group">
+                        <label asp-for="Parts[i].Content" class="control-label"></label>
+                        <input asp-for="Parts[i].Content" class="form-control"/>
+                    </div>
+                    }               
+                </div>
+                <div class="form-group" id="AddPartWrapper">
+                </div>     
+                <div class="form-group">
+                    <input id="AddPart" type="button" value="Add Part" class="btn btn-primary" />
+                    <input type="submit" value="Save" class="btn btn-primary" />
+                </div>            
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Back to List</a>
+</div>
+
+
+@section Scripts {
+<script>
+    var template = document.querySelector("#PartTemplate");
+    var count = 0;
+    document.querySelector("#AddPart").addEventListener("click", e => {
+        var add = template.cloneNode(true)
+        add.style.display = "block"
+        add.querySelectorAll("input,label").forEach(elem => {
+            elem.name = elem.name + `[${count}]` + ".Content"
+            elem.id = elem.id + `[${count}]`
+            elem.disabled = false;
+            console.log(elem.name);
+        });
+        e.target.parentNode.appendChild(add)
+        count++
+    })
+</script>
+}
